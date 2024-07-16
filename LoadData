@@ -1,0 +1,14 @@
+import numpy as np
+import pandas as pd
+
+
+def split_data(data_path, testFrom = 2011, testTo = 2011):
+    data = pd.read_csv(data_path)
+    dataTest = data[(data['YEAR'] >= testFrom) & (data['YEAR'] <= testTo)]
+    data = data.drop(dataTest.index)
+    data = data.drop(['YEAR', 'GMD'], axis=1)
+    dataTest = dataTest.drop(['YEAR', 'GMD'], axis=1)
+    return [data.drop(['GW'], axis=1).values, data[['GW']].values, dataTest.drop(['GW'], axis=1).values, dataTest[['GW']].values]
+
+
+X_train, y_train, X_test, y_test = split_data('Data/raster_df.csv')
