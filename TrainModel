@@ -1,0 +1,174 @@
+import numpy as np
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+import sklearn.metrics as met
+import skopt
+from skopt.utils import use_named_args
+from skopt.space import Integer, Real, Categorical
+import xgboost as xgb
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.ensemble import AdaBoostRegressor
+from mealpy.swarm_based.GWO import OriginalGWO
+from sklearn.preprocessing import LabelEncoder
+
+
+class Model(object):
+    def __init__(self, X_train, Y_train, X_test, Y_test, trainer = 'RF', optimaizer='BO', n_estimatorsRange=[100, 600], learning_rateRange = [10**-3, 10**0], reg_lambdaRange=[10**-1, 10**1], losses=['linear', 'square', 'exponential'], n_calls=50, epoch=5, population=10):
+        self.trainer = trainer
+        self.optimaizer = optimaizer
+        self.X_train = X_train
+        self.X_test = X_test
+        self.y_train = Y_train
+        self.y_test = Y_test
+        self.n_calls = n_calls
+        if self.optimaizer == 'BO':
+            if self.trainer == 'rfr':
+                self.search_space = list()
+                self.search_space.append(Integer(n_estimatorsRange[0], n_estimatorsRange[1], name='n_estimators'))
+                return skopt.gp_minimize(self.fit_func_rfr, self.search_space, self.n_calls=50)
+            elif self.trainer == 'xg':
+                self.search_space = list()
+                self.search_space.append(Integer(n_estimatorsRange[0], n_estimatorsRange[1], name='n_estimators'))
+                self.search_space.append(Real(learning_rateRange[0], learning_rateRange[1], "log-uniform", name='learning_rate'))
+                self.search_space.append(Real(reg_lambdaRange[0], reg_lambdaRange[1], "log-uniform", name='reg_lambda'))
+                return skopt.gp_minimize(self.fit_func_xb, self.search_space, self.n_calls=50)
+            elif self.trainer == 'ada':
+                self.search_space = list()
+                self.search_space.append(Integer(n_estimatorsRange[0], n_estimatorsRange[1], name='n_estimators'))
+                self.search_space.append(Real(learning_rateRange[0], learning_rateRange[1], "log-uniform", name='learning_rate'))
+                self.search_space.append(Categorical(losses, name='loss'))
+                return skopt.gp_minimize(self.fit_func_ada, self.search_space, self.n_calls=50)
+        elif self.optimaizer == 'GWO':
+            self.pop = population
+            self.ep = epoch
+            self.m = OriginalGWO(self.ep, self.pop)
+            if self.trainer == 'rfr':
+                self.problem_rfr = {
+                    "fit_func": self.fit_rfr,
+                    "lb": [n_estimatorsRange[0]],
+                    "ub": [n_estimatorsRange[1]],
+                    "minmax": "min",
+                }
+                best_pos, best_fit = model.solve(self.problem_rfr, mode='swarm')
+                return best_pos, best_fit
+            elif self.trainer == 'xg':
+                self.problem_xgb = {
+                    "fit_func": self.fit_xgb,
+                    "lb": [n_estimatorsRange[0], learning_rateRange[0], reg_lambdaRange[0]],
+                    "ub": [n_estimatorsRange[1], learning_rateRange[1], reg_lambdaRange[1]],
+                    "minmax": "min",
+                }
+                best_pos, best_fit = model.solve(self.problem_xgb, mode='swarm')
+                return best_pos, best_fit
+            elif self.trainer == 'ada':
+                self.problem_ada = {
+                    "fit_func": seld.fit_ada,
+                    "lb": [n_estimatorsRange[0], learning_rateRange[0], 0],
+                    "ub": [n_estimatorsRange[1], learning_rateRange[1], len(self.losses - 0.01)],
+                    "minmax": "min",
+                }
+                best_pos, best_fit = model.solve(self.problem_ada, mode='swarm')
+                return best_pos, best_fit
+            elif self.optimaizer == 'WOA':
+            self.pop = population
+            self.ep = epoch
+            self.m = OriginalWOA(self.ep, self.pop)
+            if self.trainer == 'rfr':
+                self.problem_rfr = {
+                    "fit_func": self.fit_rfr,
+                    "lb": [n_estimatorsRange[0]],
+                    "ub": [n_estimatorsRange[1]],
+                    "minmax": "min",
+                }
+                best_pos, best_fit = model.solve(self.problem_rfr, mode='swarm')
+                return best_pos, best_fit
+            elif self.trainer == 'xg':
+                self.problem_xgb = {
+                    "fit_func": self.fit_xgb,
+                    "lb": [n_estimatorsRange[0], learning_rateRange[0], reg_lambdaRange[0]],
+                    "ub": [n_estimatorsRange[1], learning_rateRange[1], reg_lambdaRange[1]],
+                    "minmax": "min",
+                }
+                best_pos, best_fit = model.solve(self.problem_xgb, mode='swarm')
+                return best_pos, best_fit
+            elif self.trainer == 'ada':
+                self.problem_ada = {
+                    "fit_func": seld.fit_ada,
+                    "lb": [n_estimatorsRange[0], learning_rateRange[0], 0],
+                    "ub": [n_estimatorsRange[1], learning_rateRange[1], len(self.losses - 0.01)],
+                    "minmax": "min",
+                }
+                best_pos, best_fit = model.solve(self.problem_ada, mode='swarm')
+                return best_pos, best_fit
+
+    @use_named_args(self.search_space)
+    def fit_func_rfr(, self, **params):
+        rfr = RandomForestRegressor(random_state=0, bootstrap=True, max_features=6, n_jobs=-1, oob_score=True)
+        print(params)
+        rfr.set_params(**params)
+        rfr.fit(self.X_train, self.Y_train)
+        y_pred = rfr.predict(self.X_test)
+        estimate = np.sqrt(met.mean_squared_error(self.Y_test, y_pred))
+        print(estimate)
+        return estimate
+
+    @use_named_args(search_space)
+    def fit_func_xgb(self, **params):
+        xg = xgb.XGBRegressor(objective='reg:squarederror', verbosity=0)
+        print(params)
+        xg.set_params(**params)
+        xg.fit(self.X_train, self.Y_train)
+        y_pred = xg.predict(self.X_test)
+        estimate = np.sqrt(met.mean_squared_error(self.Y_test, y_pred))
+        print(estimate)
+        return estimate
+
+    @use_named_args(search_space)
+    def fit_func_ada(self, **params):
+        dt = DecisionTreeRegressor()
+        ada = AdaBoostRegressor(dt)
+        print(params)
+        ada.set_params(**params)
+        ada.fit(self.X_train, self.Y_train)
+        y_pred = ada.predict(self.X_test)
+        estimate = np.sqrt(met.mean_squared_error(self.Y_test, y_pred))
+        print(estimate)
+        return estimate
+
+    def fit_rfr(solution):
+        n_es = int(solution[0])
+        print(n_es)
+        rfr = RandomForestRegressor(random_state=0, bootstrap=True, max_features=6, n_jobs=-1, oob_score=True, n_estimators=n_es)
+        rfr.fit(self.X_train, self.Y_train)
+        y_pred = rfr.predict(self.X_test)
+        estimate = np.sqrt(met.mean_squared_error(self.Y_test, y_pred))
+        print(estimate)
+        return estimate
+
+    def fit_xgb(solution):
+        n_es = int(solution[0])
+        lr = solution[1]
+        l = solution[2]
+        print(n_es, lr, l)
+        xg = xgb.XGBRegressor(objective='reg:squarederror', verbosity=0, n_estimators=n_es, learning_rate=lr, reg_lambda=l)
+        xg.fit(self.X_train, self.Y_train)
+        y_pred = xg.predict(self.X_test)
+        estimate = np.sqrt(met.mean_squared_error(self.Y_test, y_pred))
+        print(estimate)
+        return estimate
+
+    def fit_ada(solution):
+        n_es = int(solution[0])
+        lr = solution[1]
+        en = int(solution[2])
+        LOSS_ENCODER = LabelEncoder()
+        LOSS_ENCODER.fit(self.losses)
+        l = LOSS_ENCODER.inverse_transform([en])[0]
+        print(n_es, lr, l)
+        dt = DecisionTreeRegressor()
+        ada = AdaBoostRegressor(dt, n_estimators=n_es, learning_rate=lr, loss=l)
+        ada.fit(self.X_train, self.Y_train)
+        y_pred = ada.predict(self.X_test)
+        estimate = np.sqrt(met.mean_squared_error(self.Y_test, y_pred))
+        print(estimate)
+        return estimate
